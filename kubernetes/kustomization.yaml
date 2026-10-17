@@ -1,0 +1,26 @@
+# Déploiement (Kubernetes ou OpenShift) :
+#   kubectl apply -k kubernetes/      ou      oc apply -k kubernetes/
+#
+# Avant le premier déploiement : remplacer newName par votre image.
+#
+# Nouvelle version : changer newTag ci-dessous, puis réappliquer.
+# Si l'image embarque de nouvelles données OSM, le pod les réimporte au
+# démarrage (API indisponible pendant l'import).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: nominatim
+    includeSelectors: false
+
+resources:
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - networkpolicy.yaml
+
+images:
+  - name: nominatim
+    newName: docker.io/votre-compte/nominatim-senegal
+    newTag: v1

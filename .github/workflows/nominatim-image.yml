@@ -1,0 +1,111 @@
+# Image Docker Nominatim (extrait OSM régional embarqué), publiée sur Docker Hub.
+#
+# À chaque push sur main (ou lancement manuel) :
+#   1. téléchargement de l'extrait OSM (Geofabrik, empreinte vérifiée) —
+#      Sénégal par défaut, variable OSM_URL sinon ;
+#   2. build multi-architecture (QEMU pour les architectures non natives :
+#      les paquets s'installent dans chaque image cible) ;
+#   3. publication sur Docker Hub, taguée v1, v2, v3… et « latest » ;
+#   4. tag git vN posé sur le commit une fois l'image publiée.
+#
+# Chaque image embarque les données OSM du jour du build : relancer le workflow
+# (bouton « Run workflow ») suffit pour produire une image aux données fraîches.
+#
+# Settings → Secrets and variables → Actions :
+#   Variable DOCKERHUB_USERNAME     compte ou organisation Docker Hub (obligatoire)
+#   Secret   DOCKERHUB_TOKEN        jeton Docker Hub « Read & Write » (obligatoire)
+#   Variable DOCKERHUB_REPOSITORY   nom de l'image — défaut : nominatim-senegal
+#   Variable PLATEFORMES            défaut : linux/amd64,linux/arm64,linux/s390x
+#   Variable OSM_URL                extrait .osm.pbf Geofabrik — défaut : Sénégal + Gambie
+name: Image Nominatim
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: image-nominatim
+  cancel-in-progress: false
+
+env:
+  IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPOSITORY || 'nominatim-senegal' }}
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write   # pose du tag git vN
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: version
+        run: |
+          derniere=$(git tag -l 'v[0-9]*' | sed -n 's/^v\([0-9][0-9]*\)$/\1/p' | sort -n | tail -1)
+          version="v$(( ${derniere:-0} + 1 ))"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version : $version"
+
+      - name: Extrait OSM
+        id: osm
+        env:
+          OSM_URL: ${{ vars.OSM_URL }}
+        run: |
+          ./scripts/telecharger-osm.sh
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          echo "md5=$(md5sum data/region.osm.pbf | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.openstreetmap.extrait.date=${{ steps.osm.outputs.date }}
+            org.openstreetmap.extrait.md5=${{ steps.osm.outputs.md5 }}
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ vars.PLATEFORMES || 'linux/amd64,linux/arm64,linux/s390x' }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Tag git ${{ steps.version.outputs.version }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git tag "$VERSION" "$GITHUB_SHA"
+          git push origin "$VERSION"
+
+      - name: Résumé
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          OSM_DATE: ${{ steps.osm.outputs.date }}
+        run: |
+          {
+            echo "### Image publiée : ${VERSION}"
+            echo "- \`${IMAGE}:${VERSION}\` (à mettre dans kubernetes/kustomization.yaml)"
+            echo "- \`${IMAGE}:latest\`"
+            echo "- Digest : \`${DIGEST}\`"
+            echo "- Données OSM du ${OSM_DATE} — un déploiement de cette image déclenche un réimport si les données ont changé"
+          } >> "$GITHUB_STEP_SUMMARY"

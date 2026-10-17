@@ -1,0 +1,19 @@
+# N'autorise que les pods du même namespace à joindre Nominatim.
+# Pour n'autoriser qu'une application, remplacer « podSelector: {} » par le
+# label de ses pods (ex. matchLabels: { app: mon-api }).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nominatim
+spec:
+  podSelector:
+    matchLabels:
+      app: nominatim
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080

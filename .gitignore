@@ -1,0 +1,3 @@
+# Extrait OSM : téléchargé par scripts/telecharger-osm.sh (CI ou poste local)
+data/
+openshift/

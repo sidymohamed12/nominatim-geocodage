@@ -1,0 +1,92 @@
+# Nominatim : PostgreSQL + API dans un seul pod, données sur le PVC.
+#
+# - Une seule réplique et stratégie Recreate : la base est sur un volume RWO
+#   qu'un seul PostgreSQL doit ouvrir à la fois.
+# - Premier démarrage : import de l'extrait OSM (20 à 60 min selon le CPU) ;
+#   la startupProbe laisse jusqu'à 2 h avant de considérer le pod en échec.
+# - Aucun UID fixé : compatible avec la SCC restricted-v2 d'OpenShift
+#   (UID arbitraire) comme avec un Kubernetes standard (UID 1001 de l'image).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nominatim
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nominatim
+  template:
+    metadata:
+      labels:
+        app: nominatim
+    spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nominatim
+          image: nominatim
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: IMPORT_THREADS
+              value: "2"
+            - name: API_WORKERS
+              value: "2"
+            - name: PG_SHARED_BUFFERS
+              value: "512MB"
+            - name: PG_MAINTENANCE_WORK_MEM
+              value: "1GB"
+            - name: PG_EFFECTIVE_CACHE_SIZE
+              value: "2GB"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /status
+              port: http
+            periodSeconds: 30
+            failureThreshold: 240   # 2 h : premier import ou réimport
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nominatim-data
+        # PostgreSQL utilise /dev/shm (requêtes parallèles) : 64 Mio par défaut, trop peu.
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi

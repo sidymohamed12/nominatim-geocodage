@@ -1,0 +1,13 @@
+# Base PostgreSQL de Nominatim (Sénégal : quelques Gio ; marge pour le réimport ;
+# à agrandir pour un pays plus grand).
+# Classe de stockage par défaut du cluster ; sinon ajouter spec.storageClassName.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nominatim-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi

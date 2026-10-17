@@ -1,0 +1,39 @@
+# Test local de Nominatim (amd64 ou arm64 : l'image Ubuntu est multi-architecture).
+#
+#   ./scripts/telecharger-osm.sh      # une fois : data/region.osm.pbf
+#   docker compose up --build         # 1er démarrage : import (20–60 min)
+#   curl 'localhost:8088/search?q=Sandaga&format=jsonv2&countrycodes=sn'
+#
+# Autre région : OSM_URL=<extrait Geofabrik> ./scripts/telecharger-osm.sh
+#                       NOMINATIM_MIN_DELAI_ENTRE_APPELS=PT0S
+#
+# Données conservées dans le volume « nominatim-data » :
+#   docker compose down        → arrêt, base conservée
+#   docker compose down -v     → base supprimée (réimport au prochain démarrage)
+services:
+  nominatim:
+    build: .
+    image: nominatim-senegal:local
+    container_name: nominatim
+    ports:
+      - "8088:8080"   # 8088 côté poste : 8080 est souvent déjà pris
+    environment:
+      IMPORT_THREADS: "4"
+      API_WORKERS: "2"
+      PG_SHARED_BUFFERS: 512MB
+      PG_MAINTENANCE_WORK_MEM: 1GB
+      PG_EFFECTIVE_CACHE_SIZE: 2GB
+    volumes:
+      - nominatim-data:/data
+    shm_size: 512m      # comme l'emptyDir /dev/shm d'OpenShift
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 2h  # import au premier démarrage
+    restart: unless-stopped
+
+volumes:
+  nominatim-data:
