@@ -61,8 +61,11 @@ RUN python3 -m venv --system-site-packages /opt/nominatim/venv \
 
 # OpenShift lance le conteneur avec un UID arbitraire du groupe 0 : PostgreSQL
 # exige une entrée dans /etc/passwd (ajoutée au démarrage, cf. entrypoint).
+# /osm est créé ici (755) : laissé à COPY --chmod=0644, le dossier recevrait
+# aussi 0644 et deviendrait infranchissable pour un UID non root.
 RUN chmod g=u /etc/passwd \
- && mkdir -p /data \
+ && mkdir -p /data /osm \
+ && chmod 0755 /osm \
  && chgrp -R 0 /data \
  && chmod -R g=u /data
 
