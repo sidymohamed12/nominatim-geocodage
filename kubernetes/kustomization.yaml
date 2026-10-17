@@ -1,7 +1,8 @@
 # Déploiement (Kubernetes ou OpenShift) :
 #   kubectl apply -k kubernetes/      ou      oc apply -k kubernetes/
 #
-# Avant le premier déploiement : remplacer newName par votre image.
+# Image publiée par défaut (valeurs par défaut du dépôt) ; remplacer newName
+# pour utiliser votre propre image.
 #
 # Nouvelle version : changer newTag ci-dessous, puis réappliquer.
 # Si l'image embarque de nouvelles données OSM, le pod les réimporte au
@@ -22,5 +23,5 @@ resources:
 
 images:
   - name: nominatim
-    newName: docker.io/votre-compte/nominatim-senegal
+    newName: docker.io/sidymohamed12/nominatim-senegal
     newTag: v1

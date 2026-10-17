@@ -9,15 +9,39 @@ Image Docker prête à l'emploi de [Nominatim](https://nominatim.org) 5.3.2, le 
 
 Ce dépôt fournit l'image et des exemples de déploiement. **Le déploiement et l'exploitation restent à votre charge.**
 
+## Image publiée : inutile de la reconstruire
+
+Une image prête à l'emploi est publiée sur Docker Hub, construite avec les valeurs par défaut de ce dépôt :
+
+```
+docker.io/sidymohamed12/nominatim-senegal:latest   # ou un tag fixe : v1, v2, v3…
+```
+
+| Réglage                         | Valeur de l'image publiée                                                                |
+| ------------------------------- | ---------------------------------------------------------------------------------------- |
+| Extrait OSM                     | Sénégal + Gambie (Geofabrik `senegal-and-gambia`)                                        |
+| Langue par défaut des résultats | français                                                                                 |
+| Architectures                   | `linux/amd64`, `linux/arm64`, `linux/s390x`                                              |
+| Données                         | extrait du jour du build ; la date figure dans le label `org.openstreetmap.extrait.date` |
+
+Si ces valeurs vous conviennent, **utilisez directement cette image** : il n'y a rien à télécharger, construire ni configurer dans GitHub. L'extrait est déjà dans l'image, et seul l'import en base a lieu au premier démarrage. Préférez un tag fixe (`vN`) à `latest` en production : chaque nouvelle version déclenche un réimport, et vous choisissez ainsi le moment.
+
+Ne reconstruisez l'image que pour changer de région, ou pour la publier sur votre propre registre (voir [Construire et publier](#construire-et-publier-avec-github-actions)).
+
 ## Démarrage rapide
 
+Avec l'image publiée :
+
 ```bash
-./scripts/telecharger-osm.sh          # extrait Geofabrik → data/region.osm.pbf (une fois)
-docker compose up --build             # 1er démarrage : import (suivre les logs)
+docker run -d --name nominatim -p 8088:8080 -v nominatim-data:/data --shm-size=512m \
+  docker.io/sidymohamed12/nominatim-senegal:latest
+docker logs -f nominatim              # 1er démarrage : import (20 à 60 min)
 curl 'localhost:8088/search?q=Sandaga&format=jsonv2&countrycodes=sn'
 curl 'localhost:8088/reverse?lat=14.672&lon=-17.435&format=jsonv2'
 curl 'localhost:8088/lookup?osm_ids=W123456&format=jsonv2'
 ```
+
+Ou en construisant l'image depuis ce dépôt : `./scripts/telecharger-osm.sh`, puis `docker compose up --build`.
 
 L'API est celle de Nominatim : `/search`, `/reverse`, `/lookup`, `/details` et `/status`. Les paramètres sont décrits dans la [documentation de l'API Nominatim](https://nominatim.org/release-docs/latest/api/Overview/).
 
@@ -82,7 +106,7 @@ docker buildx build --platform linux/amd64,linux/s390x -t <registre>/nominatim-s
 
 ### Kubernetes ou OpenShift
 
-1. Remplacer `newName` dans `kubernetes/kustomization.yaml` par votre image.
+1. `kubernetes/kustomization.yaml` pointe vers l'image publiée. Choisir le tag (`newTag`), ou remplacer `newName` par votre propre image.
 2. Appliquer :
 
 ```bash
@@ -98,12 +122,12 @@ Le pod passe _Ready_ à la fin de l'import. Depuis le même namespace, le servic
 ### Docker
 
 ```bash
-docker run -d --name nominatim -p 8080:8080 -v nominatim-data:/data --shm-size=512m <registre>/nominatim-senegal:v1
+docker run -d --name nominatim -p 8080:8080 -v nominatim-data:/data --shm-size=512m docker.io/sidymohamed12/nominatim-senegal:v1
 ```
 
 ### Mettre à jour les données
 
-Publier une nouvelle image (relancer le workflow), puis déployer le nouveau tag. Le conteneur réimporte, et l'API est **indisponible pendant l'import** (20 à 60 min pour le Sénégal). Faire la mise à jour aux heures creuses, ou prévoir un service de secours. Une mise à jour par mois suffit en général.
+Déployer un tag plus récent de l'image publiée, ou publier votre propre image en relançant le workflow. Le conteneur réimporte, et l'API est **indisponible pendant l'import** (20 à 60 min pour le Sénégal). Faire la mise à jour aux heures creuses, ou prévoir un service de secours. Une mise à jour par mois suffit en général.
 
 **Forcer un réimport** sans changer d'image :
 
