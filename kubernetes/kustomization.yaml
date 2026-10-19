@@ -24,4 +24,4 @@ resources:
 images:
   - name: nominatim
     newName: docker.io/sidymohamed12/nominatim-senegal
-    newTag: v1
+    newTag: v2

@@ -25,6 +25,10 @@ spec:
       terminationGracePeriodSeconds: 60
       securityContext:
         runAsNonRoot: true
+        # Ne réapplique les droits du groupe sur le volume que si sa racine ne
+        # correspond pas : évite de casser les droits 0700 exigés par PostgreSQL
+        # (et un long parcours récursif du volume à chaque démarrage).
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:

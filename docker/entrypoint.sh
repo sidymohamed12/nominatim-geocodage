@@ -56,6 +56,11 @@ if [ ! -s "${PGDATA}/PG_VERSION" ]; then
            --encoding=UTF8 --locale=C.UTF-8 >/dev/null
 fi
 
+# Au redémarrage, Kubernetes/OpenShift peut avoir réappliqué les droits du
+# groupe (fsGroup) sur tout le volume : PostgreSQL refuse alors de démarrer
+# (« data directory has invalid permissions »). On remet 0700 à chaque fois.
+chmod 0700 "$PGDATA"
+
 postgres -D "$PGDATA" \
     -c listen_addresses='' \
     -c unix_socket_directories="$SOCKET_DIR" \
